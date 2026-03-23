@@ -216,24 +216,108 @@ Installed by autoresearch CLI v{version}
     )
 }
 
-/// Universal SKILL.md generator — same format works across all platforms
-/// (Claude Code, Gemini, Codex, OpenCode, Copilot, Cursor, Windsurf, .agents/)
-pub fn skill_md(_platform: &str) -> String {
-    format!(
-        r#"---
+/// Platform-specific SKILL.md generator.
+/// Each platform has slightly different frontmatter requirements.
+pub fn skill_md(platform: &str) -> String {
+    let body = core_skill_body();
+    let desc = "Autonomous experiment loop — iteratively improve any measurable metric by modifying code, evaluating results, and keeping improvements. Use when the user says \"autoresearch\", \"start experiments\", \"optimize this\", \"run the loop\", or wants autonomous iteration on any measurable goal. Reads autoresearch.toml for config. Run `autoresearch init` first.";
+
+    match platform {
+        // Claude Code: supports argument-hint, user-invocable, allowed-tools
+        "claude-code" => format!(
+            r#"---
 name: autoresearch
 description: >
-  Autonomous experiment loop — iteratively improve any measurable metric by modifying code,
-  evaluating results, and keeping improvements. Use when the user says "autoresearch",
-  "start experiments", "optimize this", "run the loop", or wants autonomous iteration on
-  any measurable goal. Reads autoresearch.toml for config. Run `autoresearch init` first.
-  Works without this skill — run `autoresearch guide` for the full methodology.
-version: {version}
+  {desc}
+argument-hint: "[goal or metric to optimize]"
+user-invocable: true
+metadata:
+  version: "{version}"
+  author: 199-biotechnologies
 ---
 {body}"#,
-        version = env!("CARGO_PKG_VERSION"),
-        body = core_skill_body()
-    )
+            desc = desc,
+            version = env!("CARGO_PKG_VERSION"),
+            body = body,
+        ),
+
+        // Gemini CLI: ONLY name + description allowed. No other fields.
+        "gemini" => format!(
+            r#"---
+name: autoresearch
+description: >
+  {desc}
+---
+{body}"#,
+            desc = desc,
+            body = body,
+        ),
+
+        // Codex CLI: name + description in SKILL.md (sidecar for extras)
+        "codex" => format!(
+            r#"---
+name: autoresearch
+description: >
+  {desc}
+---
+{body}"#,
+            desc = desc,
+            body = body,
+        ),
+
+        // GitHub Copilot: supports argument-hint, user-invocable, disable-model-invocation
+        "copilot" => format!(
+            r#"---
+name: autoresearch
+description: >
+  {desc}
+argument-hint: "[goal or metric to optimize]"
+user-invocable: true
+---
+{body}"#,
+            desc = desc,
+            body = body,
+        ),
+
+        // Cursor Skills: supports disable-model-invocation, metadata
+        "cursor" => format!(
+            r#"---
+name: autoresearch
+description: >
+  {desc}
+metadata:
+  version: "{version}"
+---
+{body}"#,
+            desc = desc,
+            version = env!("CARGO_PKG_VERSION"),
+            body = body,
+        ),
+
+        // Windsurf Skills: name + description only
+        "windsurf" => format!(
+            r#"---
+name: autoresearch
+description: >
+  {desc}
+---
+{body}"#,
+            desc = desc,
+            body = body,
+        ),
+
+        // OpenCode, .agents/, and any other platform: base spec only
+        _ => format!(
+            r#"---
+name: autoresearch
+description: >
+  {desc}
+---
+{body}"#,
+            desc = desc,
+            body = body,
+        ),
+    }
 }
 
 /// Returns the full methodology guide as plain text — for `autoresearch guide` command.

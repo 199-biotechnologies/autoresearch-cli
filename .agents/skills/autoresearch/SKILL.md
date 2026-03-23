@@ -1,12 +1,7 @@
 ---
 name: autoresearch
 description: >
-  Autonomous experiment loop — iteratively improve any measurable metric by modifying code,
-  evaluating results, and keeping improvements. Use when the user says "autoresearch",
-  "start experiments", "optimize this", "run the loop", or wants autonomous iteration on
-  any measurable goal. Reads autoresearch.toml for config. Run `autoresearch init` first.
-  Works without this skill — run `autoresearch guide` for the full methodology.
-version: 0.3.1
+  Autonomous experiment loop — iteratively improve any measurable metric by modifying code, evaluating results, and keeping improvements. Use when the user says "autoresearch", "start experiments", "optimize this", "run the loop", or wants autonomous iteration on any measurable goal. Reads autoresearch.toml for config. Run `autoresearch init` first.
 ---
 
 ## Autoresearch — Autonomous Experiment Loop
@@ -215,4 +210,4 @@ Autoresearch optimizes a **single metric** via modify-eval-keep/discard cycles.
 - **`autoresearch review`** — Pipe to Codex/Gemini for cross-model second opinions
 
 ### Version
-Installed by autoresearch CLI v0.3.1
+Installed by autoresearch CLI v0.3.2
