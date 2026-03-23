@@ -53,9 +53,9 @@ pub fn run(json: bool) -> Result<(), CliError> {
             let ma = a.metric.unwrap();
             let mb = b.metric.unwrap();
             if lower_is_better {
-                ma.partial_cmp(&mb).unwrap()
+                crate::git::safe_cmp(ma, mb)
             } else {
-                mb.partial_cmp(&ma).unwrap()
+                crate::git::safe_cmp(mb, ma)
             }
         });
 

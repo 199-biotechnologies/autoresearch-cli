@@ -32,9 +32,9 @@ pub fn run(json: bool) -> Result<(), CliError> {
             let ma = a.metric.unwrap();
             let mb = b.metric.unwrap();
             if lower_is_better {
-                ma.partial_cmp(&mb).unwrap()
+                crate::git::safe_cmp(ma, mb)
             } else {
-                mb.partial_cmp(&ma).unwrap()
+                crate::git::safe_cmp(mb, ma)
             }
         });
 
@@ -51,12 +51,14 @@ pub fn run(json: bool) -> Result<(), CliError> {
             if let Some(bl) = baseline {
                 data["baseline"] = serde_json::json!(bl);
                 if let (Some(bm), Some(blm)) = (best.metric, bl.metric) {
-                    let improvement = if lower_is_better {
-                        ((blm - bm) / blm) * 100.0
-                    } else {
-                        ((bm - blm) / blm) * 100.0
-                    };
-                    data["improvement_pct"] = serde_json::json!(improvement);
+                    if blm.abs() > f64::EPSILON {
+                        let improvement = if lower_is_better {
+                            ((blm - bm) / blm) * 100.0
+                        } else {
+                            ((bm - blm) / blm) * 100.0
+                        };
+                        data["improvement_pct"] = serde_json::json!(improvement);
+                    }
                 }
             }
             println!("{}", serde_json::to_string_pretty(&data).unwrap());
@@ -75,16 +77,18 @@ pub fn run(json: bool) -> Result<(), CliError> {
 
             if let Some(bl) = baseline {
                 if let (Some(bm), Some(blm)) = (best.metric, bl.metric) {
-                    let improvement = if lower_is_better {
-                        ((blm - bm) / blm) * 100.0
-                    } else {
-                        ((bm - blm) / blm) * 100.0
-                    };
-                    println!();
-                    println!(
-                        "  Baseline: {:.6} -> Best: {:.6} ({:.2}% improvement)",
-                        blm, bm, improvement
-                    );
+                    if blm.abs() > f64::EPSILON {
+                        let improvement = if lower_is_better {
+                            ((blm - bm) / blm) * 100.0
+                        } else {
+                            ((bm - blm) / blm) * 100.0
+                        };
+                        println!();
+                        println!(
+                            "  Baseline: {:.6} -> Best: {:.6} ({:.2}% improvement)",
+                            blm, bm, improvement
+                        );
+                    }
                 }
             }
 

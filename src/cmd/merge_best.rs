@@ -60,9 +60,9 @@ pub fn run(json: bool) -> Result<(), CliError> {
                 let ma = a.metric.unwrap();
                 let mb = b.metric.unwrap();
                 if lower_is_better {
-                    ma.partial_cmp(&mb).unwrap()
+                    crate::git::safe_cmp(ma, mb)
                 } else {
-                    mb.partial_cmp(&ma).unwrap()
+                    crate::git::safe_cmp(mb, ma)
                 }
             });
 
@@ -82,9 +82,9 @@ pub fn run(json: bool) -> Result<(), CliError> {
         match (a.best_metric, b.best_metric) {
             (Some(ma), Some(mb)) => {
                 if lower_is_better {
-                    ma.partial_cmp(&mb).unwrap()
+                    crate::git::safe_cmp(ma, mb)
                 } else {
-                    mb.partial_cmp(&ma).unwrap()
+                    crate::git::safe_cmp(mb, ma)
                 }
             }
             (Some(_), None) => std::cmp::Ordering::Less,

@@ -6,6 +6,14 @@ use std::io::Write;
 pub fn run(metric: f64, status: &str, summary: &str, json: bool) -> Result<(), CliError> {
     let format = OutputFormat::detect(json);
 
+    // Validate metric — reject NaN and Infinity
+    if metric.is_nan() || metric.is_infinite() {
+        return Err(CliError::Config(format!(
+            "Invalid metric value '{}'. Must be a finite number, not NaN or Infinity.",
+            metric
+        )));
+    }
+
     // Validate status
     let valid_statuses = ["baseline", "kept", "keep", "discarded", "discard"];
     if !valid_statuses.contains(&status) {
@@ -91,11 +99,17 @@ pub fn run(metric: f64, status: &str, summary: &str, json: bool) -> Result<(), C
         "timestamp": timestamp,
     });
 
-    // Append to JSONL file
+    // Append to JSONL file with write lock to prevent corruption from concurrent writes
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(log_path)?;
+
+    // Use flock for atomic appends (prevents interleaved writes from parallel agents)
+    use std::os::unix::io::AsRawFd;
+    unsafe {
+        libc::flock(file.as_raw_fd(), libc::LOCK_EX);
+    }
     writeln!(file, "{}", serde_json::to_string(&record).unwrap())?;
 
     match format {

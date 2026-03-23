@@ -223,7 +223,7 @@ fn extract_metric(text: &str) -> Option<f64> {
             let start = idx + pattern.len();
             let num_str: String = text[start..]
                 .chars()
-                .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-')
+                .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-' || *c == 'e' || *c == 'E' || *c == '+')
                 .collect();
             if let Ok(val) = num_str.parse::<f64>() {
                 return Some(val);
@@ -231,6 +231,11 @@ fn extract_metric(text: &str) -> Option<f64> {
         }
     }
     None
+}
+
+/// Safe f64 comparison that handles NaN (NaN sorts last)
+pub fn safe_cmp(a: f64, b: f64) -> std::cmp::Ordering {
+    a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal)
 }
 
 /// Get diff between two commits
