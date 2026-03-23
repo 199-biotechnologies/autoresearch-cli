@@ -151,22 +151,95 @@ pub fn run(metric: f64, status: &str, summary: &str, json: bool) -> Result<(), C
     writeln!(file, "{}", serde_json::to_string(&record).unwrap())?;
     // Lock is released when file is dropped
 
+    // Generate contextual hints based on experiment state
+    let hints = generate_hints(&content, normalized_status, run_number);
+
     match format {
         OutputFormat::Json => {
-            let out = serde_json::json!({
+            let mut out = serde_json::json!({
                 "status": "success",
                 "data": record,
             });
+            if !hints.is_empty() {
+                out["hints"] = serde_json::json!(hints);
+            }
             println!("{}", serde_json::to_string_pretty(&out).unwrap());
         }
         OutputFormat::Table => {
             println!(
                 "Recorded experiment #{run_number}: metric={metric:.6} status={normalized_status} — {summary}"
             );
+            for hint in &hints {
+                eprintln!("hint: {hint}");
+            }
         }
     }
 
     Ok(())
+}
+
+/// Generate contextual hints based on experiment history
+fn generate_hints(jsonl_content: &str, status: &str, run_number: usize) -> Vec<String> {
+    let mut hints = Vec::new();
+
+    // Count recent consecutive discards
+    let recent_statuses: Vec<&str> = jsonl_content
+        .lines()
+        .rev()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| {
+            serde_json::from_str::<serde_json::Value>(l)
+                .ok()
+                .and_then(|v| v.get("status").and_then(|s| s.as_str().map(|s| s.to_string())))
+        })
+        .take(10)
+        .map(|s| if s == "discarded" { "discarded" } else { "other" })
+        .collect();
+
+    let consecutive_discards = recent_statuses
+        .iter()
+        .take_while(|s| **s == "discarded")
+        .count();
+
+    // Add current status to count if it's a discard
+    let total_streak = if status == "discarded" {
+        consecutive_discards + 1
+    } else {
+        0
+    };
+
+    // Contextual hints based on state
+    if total_streak >= 7 {
+        hints.push(
+            "STUCK: 7+ consecutive discards. You are in a deep local minimum. Try a fundamentally different approach: change strategy entirely, try removing code instead of adding, or run `autoresearch review` for cross-model analysis.".to_string()
+        );
+    } else if total_streak >= 5 {
+        hints.push(
+            "WARNING: 5+ consecutive discards. Consider: (1) run `autoresearch review` for fresh perspective, (2) try the OPPOSITE of recent attempts, (3) use `autoresearch fork` to explore multiple directions.".to_string()
+        );
+    } else if total_streak >= 3 {
+        hints.push(
+            "3 consecutive discards. Re-read `program.md` for ideas you haven't tried. Consider a different category of change (e.g., if tuning hyperparameters, try architecture instead).".to_string()
+        );
+    }
+
+    if run_number == 0 && status == "baseline" {
+        hints.push(
+            "Baseline recorded. Strategy: start with hyperparameter tuning (learning rate, batch size, weight decay) — lowest risk, highest signal. Save architecture changes for later.".to_string()
+        );
+    }
+
+    if status == "kept" && run_number > 0 {
+        hints.push("Good improvement. Keep exploring in this direction with small variations before switching to a different approach.".to_string());
+    }
+
+    if run_number > 0 && run_number % 20 == 0 {
+        hints.push(format!(
+            "{run_number} experiments completed. Consider running `autoresearch report` to review progress and `autoresearch review` for cross-model analysis."
+        ));
+    }
+
+    hints
 }
 
 fn load_config() -> Result<toml::Table, CliError> {
