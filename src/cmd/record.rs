@@ -71,26 +71,36 @@ pub fn run(metric: f64, status: &str, summary: &str, json: bool) -> Result<(), C
         }
     }
 
-    // Read existing experiments to determine run number
     let log_path = ".autoresearch/experiments.jsonl";
     fs::create_dir_all(".autoresearch")?;
 
-    let run_number = if std::path::Path::new(log_path).exists() {
-        let content = fs::read_to_string(log_path)?;
-        content
-            .lines()
-            .filter(|l| !l.trim().is_empty())
-            .filter_map(|l| {
-                serde_json::from_str::<serde_json::Value>(l)
-                    .ok()
-                    .and_then(|v| v.get("run").and_then(|r| r.as_u64()))
-            })
-            .max()
-            .map(|m| m as usize + 1)
-            .unwrap_or(0)
-    } else {
-        0
-    };
+    // Open and lock file FIRST, then compute run number inside the lock
+    // This prevents race conditions where two concurrent records get the same run number
+    let mut file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .append(true)
+        .open(log_path)?;
+
+    // Acquire exclusive lock before reading or writing
+    use std::os::unix::io::AsRawFd;
+    unsafe {
+        libc::flock(file.as_raw_fd(), libc::LOCK_EX);
+    }
+
+    // Now read existing content under lock to determine run number
+    let content = fs::read_to_string(log_path)?;
+    let run_number = content
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| {
+            serde_json::from_str::<serde_json::Value>(l)
+                .ok()
+                .and_then(|v| v.get("run").and_then(|r| r.as_u64()))
+        })
+        .max()
+        .map(|m| m as usize + 1)
+        .unwrap_or(0);
 
     // Get current git hash
     let hash = std::process::Command::new("git")
@@ -137,18 +147,9 @@ pub fn run(metric: f64, status: &str, summary: &str, json: bool) -> Result<(), C
         "timestamp": timestamp,
     });
 
-    // Append to JSONL file with write lock to prevent corruption from concurrent writes
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_path)?;
-
-    // Use flock for atomic appends (prevents interleaved writes from parallel agents)
-    use std::os::unix::io::AsRawFd;
-    unsafe {
-        libc::flock(file.as_raw_fd(), libc::LOCK_EX);
-    }
+    // Write under the lock we already hold (file opened + locked above)
     writeln!(file, "{}", serde_json::to_string(&record).unwrap())?;
+    // Lock is released when file is dropped
 
     match format {
         OutputFormat::Json => {

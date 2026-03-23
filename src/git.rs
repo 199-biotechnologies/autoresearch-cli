@@ -90,6 +90,15 @@ pub fn parse_experiments(branch: &str, limit: usize) -> Result<Vec<Experiment>, 
                 return Ok(exps);
             }
         }
+        // Fallback: try working-tree JSONL even when not on target branch
+        // (handles case where branch doesn't exist yet but JSONL was created by `record`)
+        if let Ok(experiments) = parse_jsonl_log() {
+            if !experiments.is_empty() {
+                let mut exps = experiments;
+                exps.truncate(limit);
+                return Ok(exps);
+            }
+        }
     }
 
     // Fall back to git log parsing
