@@ -134,6 +134,8 @@ autoresearch export --format csv # Export for analysis
 | `export` | Export as CSV, JSON, or JSONL | |
 | `fork <names...>` | Branch experiments into parallel directions for multi-agent exploration | |
 | `review` | Generate cross-model review prompt with pattern detection | * |
+| `watch` | Live terminal dashboard — watch experiments in real time | |
+| `merge-best` | Compare fork branches and identify the winner | * |
 | `report` | Generate markdown research report | |
 | `agent-info` | Machine-readable capability metadata | * |
 
@@ -273,6 +275,26 @@ Generates a structured review prompt with:
 - Suggested next directions
 
 Pipe to Codex or Gemini for cross-model insights that break local minima.
+
+### Watch: Live Dashboard
+
+Monitor experiments in real time from another terminal:
+
+```bash
+autoresearch watch
+```
+
+Shows a live-updating dashboard with sparkline progress, kept/discarded rates, best metric, and new experiment notifications. Refreshes every 2 seconds (configurable with `-i`).
+
+### Merge Best: Pick the Winner
+
+After forks finish exploring, compare them and find the winner:
+
+```bash
+autoresearch merge-best
+```
+
+Ranks all fork branches by best metric, shows a comparison table, and gives you the git commands to merge the winner and clean up losers.
 
 ---
 

@@ -114,6 +114,16 @@ pub enum Commands {
     /// Generate a cross-model review prompt from experiment history
     Review,
 
+    /// Live terminal dashboard — watch experiments as they happen
+    Watch {
+        /// Refresh interval in seconds
+        #[arg(short, long, default_value = "2")]
+        interval: u64,
+    },
+
+    /// Compare fork branches and merge the best one back
+    MergeBest,
+
     /// Generate a markdown report of the research session
     Report {
         /// Output file path (stdout if not specified)

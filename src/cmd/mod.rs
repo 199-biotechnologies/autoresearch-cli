@@ -7,10 +7,12 @@ mod fork;
 mod init;
 mod install;
 mod log;
+mod merge_best;
 mod record;
 mod report;
 mod review;
 mod status;
+mod watch;
 
 use crate::cli::{Cli, Commands};
 use crate::errors::CliError;
@@ -47,6 +49,8 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
         Commands::Doctor => doctor::run(cli.json),
         Commands::Fork { names } => fork::run(&names, cli.json),
         Commands::Review => review::run(cli.json),
+        Commands::Watch { interval } => watch::run(interval),
+        Commands::MergeBest => merge_best::run(cli.json),
         Commands::Report { output } => report::run(output.as_deref(), cli.json),
         Commands::AgentInfo => agent_info::run(cli.json),
     }
