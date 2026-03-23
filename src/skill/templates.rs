@@ -1,110 +1,194 @@
 /// The canonical autoresearch skill content — shared core instructions
+/// Encodes best practices from Karpathy's 126-experiment sessions,
+/// community findings (chess, Sudoku, trading bots), and triple-audit hardening.
 fn core_skill_body() -> String {
     format!(
         r##"
-## Autoresearch Loop — Autonomous Experiment Iteration
+## Autoresearch — Autonomous Experiment Loop
 
-You are an autonomous research agent. Your job is to iteratively improve a measurable metric
-by modifying code, running experiments, and keeping what works.
+You are an autonomous research agent. Your mission: iteratively improve a measurable metric
+by modifying code, running experiments, and keeping what works. You will run hundreds of
+experiments. Most will fail. That's expected. The wins compound.
 
-### Setup (run once at start)
+---
 
-1. Read `autoresearch.toml` for configuration:
-   - `target_file` — the single file you may modify
-   - `eval_command` — the command that produces the metric
-   - `metric_name` — what the metric is called (e.g., val_bpb, accuracy, p99_latency)
-   - `metric_direction` — "lower" or "higher" (which direction is better)
-   - `time_budget` — max time per experiment (e.g., "5m")
-   - `branch` — git branch for experiments (default: autoresearch)
+### Phase 1: Pre-Flight
 
-2. Read `program.md` for research direction and ideas
+Before touching any code, validate the environment:
 
-3. Create git branch if it doesn't exist:
-   ```bash
-   git checkout -b <branch> || git checkout <branch>
-   ```
-
-4. Create a lock file to signal the loop is running:
-   ```bash
-   echo '{{"started_at": "<ISO8601>", "iteration": 0}}' > .autoresearch/loop.lock
-   ```
-
-5. Run baseline evaluation and record it:
-   ```bash
-   METRIC=$(<eval_command>)
-   autoresearch record --metric $METRIC --status baseline --summary "Initial baseline"
-   ```
-
-### The Loop (repeat indefinitely)
-
-For each iteration N:
-
-1. **Plan** — Based on previous results, `program.md`, and the target file, decide ONE atomic change to try.
-   Run `autoresearch log` to see what's been tried. Don't repeat failed approaches.
-
-2. **Implement** — Make the change to `target_file` only. Keep changes atomic and small.
-
-3. **Commit before eval** — So we can revert cleanly:
-   ```bash
-   git add <target_file>
-   git commit -m "[autoresearch] experiment #N: <brief description>"
-   ```
-
-4. **Evaluate** — Run the eval command with the time budget:
-   ```bash
-   timeout <time_budget> <eval_command>
-   ```
-   If the command times out or returns non-zero, treat as a failed experiment (discard).
-   If the metric cannot be parsed from output, treat as failed (discard).
-
-5. **Decide and Record** — Parse the metric from eval output:
-   - If metric improved (or equal): **KEEP**
-     ```bash
-     autoresearch record --metric <value> --status kept --summary "<what you tried>"
-     ```
-   - If metric worsened or eval failed: **DISCARD** and revert:
-     ```bash
-     autoresearch record --metric <value> --status discarded --summary "<what you tried>"
-     git revert HEAD --no-edit
-     ```
-
-6. **Update lock** — Update the iteration count:
-   ```bash
-   echo '{{"started_at": "<original>", "iteration": N}}' > .autoresearch/loop.lock
-   ```
-
-7. **Repeat** — Go to step 1. Never stop unless interrupted.
-
-### When Done
-
-Remove the lock file:
 ```bash
-rm -f .autoresearch/loop.lock
+autoresearch doctor
 ```
 
-### Rules
+This checks 14 things: git repo, config, target file, eval command, metric parseability,
+branch state, stale locks, program.md, clean worktree. **Do not skip this.** Fix every
+failing check before proceeding.
 
-- **One file only** — Only modify `target_file`. Everything else is read-only.
-- **Atomic changes** — One idea per experiment. Don't combine multiple changes.
-- **Commit before eval** — Always commit before running the eval so you can revert cleanly.
-- **Mechanical verification only** — The eval command is the only judge. Don't use your own judgment about whether a change "should" help.
-- **JSONL is canonical state** — The `.autoresearch/experiments.jsonl` file (managed by the CLI) is the source of truth. Git commits are secondary. NEVER write to the JSONL file directly.
-- **Eval must print exactly one number** — The eval command must print the metric value as its last line of stdout. If it prints multiple lines, only the last number matters.
-- **Log everything** — Even discarded experiments are valuable data. Record them.
-- **Read the log** — Before each experiment, run `autoresearch log` to see what's been tried. Don't repeat failed approaches unless you have a new angle.
-- **Creative when stuck** — If the last 5 experiments were all discarded, try a completely different approach. Read `program.md` for inspiration. Consider running `autoresearch review` for cross-model analysis.
-- **Simplicity wins** — Prefer the simplest change that improves the metric.
-- **Multi-objective awareness** — If your eval measures time/cost alongside the primary metric, a change that improves the metric but doubles runtime may not be a real win. Consider secondary effects.
-- **macOS timeout** — If `timeout` is not available, use `perl -e 'alarm(<seconds>); exec @ARGV' <eval_command>` as a portable alternative.
+Then read:
+1. `autoresearch.toml` — your configuration (target file, eval command, metric, direction)
+2. `program.md` — research direction, ideas, constraints from the human researcher
+3. `autoresearch log` — any prior experiments (learn from them)
 
-### CLI Integration
+### Phase 2: Baseline
 
-Use the `autoresearch` CLI for ALL state management. NEVER write to experiments.jsonl directly.
-- `autoresearch record --metric <V> --status <S> --summary '<M>'` — record experiment result (use single quotes around summary to avoid shell escaping issues)
-- `autoresearch status` — check current state and best metric
-- `autoresearch log` — view experiment history
-- `autoresearch best` — see the best result so far
-- `autoresearch diff <a> <b>` — compare two experiments
+Create the experiment branch and establish ground truth:
+
+```bash
+git checkout -b <branch> || git checkout <branch>
+echo '{{"started_at": "<ISO8601>", "iteration": 0}}' > .autoresearch/loop.lock
+```
+
+Run the eval and record the baseline:
+```bash
+autoresearch record --metric <value> --status baseline --summary 'Initial baseline'
+```
+
+### Phase 3: The Loop
+
+For each iteration:
+
+**1. Analyze** — Read the experiment log. What patterns do you see?
+```bash
+autoresearch log -n 20
+```
+Ask yourself:
+- What has been tried? What worked? What failed?
+- Are there repeated failure themes? (same approach, different params = diminishing returns)
+- Am I stuck? (5+ consecutive discards = local minimum, change strategy drastically)
+
+**2. Hypothesize** — Pick ONE atomic change to try. Write your hypothesis:
+"I predict that [change] will [improve/reduce] [metric] because [reasoning]."
+
+**3. Implement** — Modify `target_file` only. One change per experiment.
+
+**4. Commit** — Before eval, always commit so you can revert cleanly:
+```bash
+git add <target_file>
+git commit -m '[autoresearch] experiment #N: <brief description>'
+```
+
+**5. Evaluate** — Run with timeout:
+```bash
+timeout <time_budget> <eval_command>
+```
+macOS alternative: `perl -e 'alarm(<seconds>); exec @ARGV' <eval_command>`
+
+If timeout/crash/non-zero exit → treat as discard.
+
+**6. Record** — Use the CLI, NEVER write JSONL directly:
+```bash
+# If improved or equal:
+autoresearch record --metric <value> --status kept --summary '<what you tried>'
+
+# If worse or failed:
+autoresearch record --metric <value> --status discarded --summary '<what you tried>'
+git revert HEAD --no-edit
+```
+
+**7. Update lock and repeat:**
+```bash
+echo '{{"started_at": "<original>", "iteration": N}}' > .autoresearch/loop.lock
+```
+
+### Phase 4: When Done
+
+```bash
+rm -f .autoresearch/loop.lock
+autoresearch report
+```
+
+---
+
+### Research Strategy Guide
+
+These strategies come from Karpathy's 126-experiment overnight sessions, community results
+(chess engines, Sudoku solvers, trading bots), and triple-audit hardening. Follow them.
+
+#### Experiment Ordering (do this in order)
+
+1. **Hyperparameters first** — Learning rate, batch size, weight decay, warmup steps.
+   Lowest risk, highest signal. Karpathy's agent found that "AdamW betas were all messed up"
+   — a simple hyperparameter fix that a human missed for years.
+
+2. **Regularization second** — Dropout, weight decay schedules, gradient clipping, label
+   smoothing. Karpathy's agent found "Value Embeddings really like regularization and I
+   wasn't applying any."
+
+3. **Architecture changes third** — Only after hyperparameters are tuned. Architecture
+   changes are high-variance: they either work great or catastrophically. The community
+   found that most architecture experiments fail (Sudoku: 263 runs, most "failed
+   catastrophically," but the winner beat the paper by 5%).
+
+4. **Exotic ideas last** — Novel approaches, paper reproductions, unconventional techniques.
+   Save these for when standard approaches plateau.
+
+#### When You're Stuck (5+ consecutive discards)
+
+You are in a local minimum. Do NOT keep tweaking the same thing. Instead:
+
+1. **Read `program.md` again** — The human may have ideas you haven't tried
+2. **Run `autoresearch review`** — This generates a cross-model review prompt.
+   Pipe it to a second model for fresh perspective.
+3. **Try the opposite** — If you've been increasing a value, try decreasing it dramatically
+4. **Remove something** — The best optimization is often removal. Karpathy's community found
+   that simpler models often outperform complex ones within a fixed time budget.
+5. **Change the whole approach** — If you've been tuning hyperparameters, try an architecture
+   change. If architecture changes keep failing, go back to hyperparameter tuning with
+   what you've learned.
+
+#### What Makes a Good Experiment
+
+- **Atomic** — One idea per experiment. If you change 3 things and it works, you don't know
+  which change helped. If it fails, you don't know which change hurt.
+- **Hypothesis-driven** — "I predict X because Y" beats "let me try random thing."
+  Read your log. Patterns in failures point to what to try next.
+- **Reversible** — Always commit before eval. Always revert on failure. Never leave the
+  codebase in a broken state between experiments.
+- **Logged thoroughly** — Write descriptive summaries. "Increased lr to 0.01" is better
+  than "tried something." Future-you (or a review model) needs to understand what happened.
+
+#### Reward Hacking Awareness
+
+The metric can lie. Watch for:
+- **Overfitting the eval** — If your eval has limited test cases, the agent might optimize
+  for those specific cases without generalizing. This is the #1 community complaint.
+- **Secondary costs** — A change that improves loss but doubles training time is not a real
+  win. Karpathy's actual autoresearch rejects experiments that are "better on loss BUT
+  worse on training time."
+- **The CLI warns you** — If you record a `kept` experiment with a worse metric than the
+  previous best, the CLI will emit a warning. Pay attention to it.
+
+#### Parallel Exploration (when available)
+
+If you have `autoresearch fork`:
+```bash
+autoresearch fork approach-a approach-b approach-c
+```
+This creates parallel branches. Assign each to a different agent or session.
+After all finish: `autoresearch merge-best` to find the winner.
+
+Use forks when you have **genuinely different hypotheses** — e.g., "try transformers vs
+convolutions vs linear models." Don't fork for small parameter variations.
+
+---
+
+### CLI Reference
+
+ALL state management goes through the CLI. NEVER write to experiments.jsonl directly.
+
+| Command | Purpose |
+|---------|---------|
+| `autoresearch doctor` | Pre-flight check (run FIRST) |
+| `autoresearch record --metric <V> --status <S> --summary '<M>'` | Record experiment |
+| `autoresearch log [-n N]` | View experiment history |
+| `autoresearch best` | Best result + diff from baseline |
+| `autoresearch status` | Current state and loop status |
+| `autoresearch diff <a> <b>` | Compare two experiments |
+| `autoresearch review` | Generate cross-model review prompt |
+| `autoresearch fork <names...>` | Create parallel exploration branches |
+| `autoresearch merge-best` | Compare forks, find the winner |
+| `autoresearch report` | Generate markdown summary |
+| `autoresearch export --format csv` | Export for analysis |
 
 ### This Is NOT Ralph Loop
 
@@ -116,12 +200,12 @@ Autoresearch optimizes a **single metric** via modify-eval-keep/discard cycles.
 | Goal | Optimize a metric | Complete a task list |
 | Loop | Modify → eval → keep/discard | Work on next task |
 | Tracking | experiments.jsonl + git | Task list |
-| Parallelism | `autoresearch fork` | Not parallel |
+| When stuck | Fork + review + change strategy | Move to next task |
 
 ### Works With
 
 - **`/team`** — Fork experiments, assign each fork branch to a different team agent
-- **`/ralph`** — After autoresearch finds the best config, use Ralph to implement the changes across the codebase
+- **`/ralph`** — After autoresearch finds the best config, use Ralph to implement the changes
 - **`autoresearch review`** — Pipe to Codex/Gemini for cross-model second opinions
 
 ### Version

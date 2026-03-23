@@ -4,10 +4,16 @@ use clap::{Parser, Subcommand, ValueEnum};
 #[command(
     name = "autoresearch",
     version,
-    about = "Universal autoresearch CLI — install skills, track experiments, view results",
+    about = "Universal autoresearch CLI — optimize any metric with autonomous experiments",
     long_about = "Autoresearch CLI brings Karpathy's autoresearch pattern to any project.\n\n\
-        Install the autoresearch loop skill into any AI coding agent (Claude Code, Codex, \
-        OpenCode, Cursor, Windsurf), scaffold experiments, and track results from the terminal."
+        Workflow: doctor → init → baseline → loop (hypothesize → implement → commit → eval → record) → report\n\n\
+        Quick start:\n  \
+        1. autoresearch install claude-code  (or codex, opencode, cursor, windsurf, all)\n  \
+        2. autoresearch init --target-file <F> --eval-command <C>\n  \
+        3. autoresearch doctor  (validate before starting)\n  \
+        4. Tell your agent: /autoresearch\n\n\
+        Best practices: hyperparameters first, one change per experiment, fork when stuck.\n\
+        Run `autoresearch agent-info --json` for full machine-readable capabilities + strategy guide."
 )]
 pub struct Cli {
     #[command(subcommand)]
