@@ -1,7 +1,8 @@
-/// The canonical autoresearch skill content — shared core instructions
-fn core_skill_body() -> String {
-    format!(
-        r##"
+---
+trigger: glob
+glob: "**/autoresearch.toml"
+---
+
 ## Autoresearch Loop — Autonomous Experiment Iteration
 
 You are an autonomous research agent. Your job is to iteratively improve a measurable metric
@@ -26,7 +27,7 @@ by modifying code, running experiments, and keeping what works.
 
 4. Create a lock file to signal the loop is running:
    ```bash
-   echo '{{"started_at": "<ISO8601>", "iteration": 0}}' > .autoresearch/loop.lock
+   echo '{"started_at": "<ISO8601>", "iteration": 0}' > .autoresearch/loop.lock
    ```
 
 5. Run baseline evaluation and record it:
@@ -70,7 +71,7 @@ For each iteration N:
 
 6. **Update lock** — Update the iteration count:
    ```bash
-   echo '{{"started_at": "<original>", "iteration": N}}' > .autoresearch/loop.lock
+   echo '{"started_at": "<original>", "iteration": N}' > .autoresearch/loop.lock
    ```
 
 7. **Repeat** — Go to step 1. Never stop unless interrupted.
@@ -125,85 +126,4 @@ Autoresearch optimizes a **single metric** via modify-eval-keep/discard cycles.
 - **`autoresearch review`** — Pipe to Codex/Gemini for cross-model second opinions
 
 ### Version
-Installed by autoresearch CLI v{version}
-"##,
-        version = env!("CARGO_PKG_VERSION")
-    )
-}
-
-pub fn claude_code_skill() -> String {
-    format!(
-        r#"---
-name: autoresearch
-description: >
-  Autonomous experiment loop — iteratively improve any measurable metric by modifying code,
-  evaluating results, and keeping improvements. Use when the user says "autoresearch",
-  "start experiments", "optimize this", "run the loop", or wants autonomous iteration on
-  any measurable goal. Reads autoresearch.toml for config. Run `autoresearch init` first.
-  NOT the same as Ralph Loop (which works through task lists). Autoresearch optimizes a
-  single metric via modify-eval-keep/discard cycles. Composes with /team for multi-agent
-  fork exploration.
-version: {version}
----
-{body}"#,
-        version = env!("CARGO_PKG_VERSION"),
-        body = core_skill_body()
-    )
-}
-
-pub fn codex_skill() -> String {
-    format!(
-        r#"---
-name: autoresearch
-description: >
-  Autonomous experiment loop — iteratively improve any measurable metric by modifying code,
-  evaluating results, and keeping improvements. Use when the user says "autoresearch",
-  "start experiments", "optimize this", or wants autonomous iteration. Reads autoresearch.toml.
-version: {version}
----
-{body}"#,
-        version = env!("CARGO_PKG_VERSION"),
-        body = core_skill_body()
-    )
-}
-
-pub fn opencode_skill() -> String {
-    format!(
-        r#"---
-name: autoresearch
-description: >
-  Autonomous experiment loop — iteratively improve any measurable metric by modifying code,
-  evaluating results, and keeping improvements. Reads autoresearch.toml for configuration.
-version: {version}
----
-{body}"#,
-        version = env!("CARGO_PKG_VERSION"),
-        body = core_skill_body()
-    )
-}
-
-pub fn cursor_rule() -> String {
-    format!(
-        r#"---
-description: >
-  Autoresearch autonomous experiment loop — activate when user says "autoresearch",
-  "start experiments", "optimize this", or wants iterative metric improvement.
-  Reads autoresearch.toml for config.
-globs: "**/autoresearch.toml"
-alwaysApply: false
----
-{body}"#,
-        body = core_skill_body()
-    )
-}
-
-pub fn windsurf_rule() -> String {
-    format!(
-        r#"---
-trigger: glob
-glob: "**/autoresearch.toml"
----
-{body}"#,
-        body = core_skill_body()
-    )
-}
+Installed by autoresearch CLI v0.2.4
