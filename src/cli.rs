@@ -137,6 +137,9 @@ pub enum Commands {
         output: Option<String>,
     },
 
+    /// Print the full autoresearch methodology guide (works without skill installed)
+    Guide,
+
     /// Show CLI capabilities for agent discovery
     AgentInfo,
 }
@@ -145,14 +148,20 @@ pub enum Commands {
 pub enum InstallTarget {
     /// Claude Code (~/.claude/skills/)
     ClaudeCode,
+    /// Gemini CLI (~/.gemini/skills/)
+    Gemini,
     /// Codex CLI (~/.codex/skills/)
     Codex,
     /// OpenCode (~/.config/opencode/skills/)
     Opencode,
-    /// Cursor (.cursor/rules/)
+    /// GitHub Copilot (.github/skills/)
+    Copilot,
+    /// Cursor (.cursor/skills/)
     Cursor,
-    /// Windsurf (.windsurf/rules/)
+    /// Windsurf (.windsurf/skills/)
     Windsurf,
+    /// Universal .agents/skills/ (Augment, Goose, Roo, etc.)
+    Agents,
     /// Install into all supported agents
     All,
 }

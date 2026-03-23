@@ -12,10 +12,13 @@ pub fn install(target: &InstallTarget) -> Result<Vec<String>, CliError> {
             let mut installed = Vec::new();
             let targets = [
                 InstallTarget::ClaudeCode,
+                InstallTarget::Gemini,
                 InstallTarget::Codex,
                 InstallTarget::Opencode,
+                InstallTarget::Copilot,
                 InstallTarget::Cursor,
                 InstallTarget::Windsurf,
+                InstallTarget::Agents,
             ];
             for t in &targets {
                 match install_single(t) {
@@ -41,28 +44,43 @@ fn install_single(target: &InstallTarget) -> Result<String, CliError> {
     let (dir, filename, content) = match target {
         InstallTarget::ClaudeCode => {
             let dir = home_dir()?.join(".claude/skills/autoresearch");
-            let content = templates::claude_code_skill();
+            let content = templates::skill_md("claude-code");
+            (dir, "SKILL.md", content)
+        }
+        InstallTarget::Gemini => {
+            let dir = home_dir()?.join(".gemini/skills/autoresearch");
+            let content = templates::skill_md("gemini");
             (dir, "SKILL.md", content)
         }
         InstallTarget::Codex => {
             let dir = home_dir()?.join(".codex/skills/autoresearch");
-            let content = templates::codex_skill();
+            let content = templates::skill_md("codex");
             (dir, "SKILL.md", content)
         }
         InstallTarget::Opencode => {
             let dir = home_dir()?.join(".config/opencode/skills/autoresearch");
-            let content = templates::opencode_skill();
+            let content = templates::skill_md("opencode");
+            (dir, "SKILL.md", content)
+        }
+        InstallTarget::Copilot => {
+            let dir = PathBuf::from(".github/skills/autoresearch");
+            let content = templates::skill_md("copilot");
             (dir, "SKILL.md", content)
         }
         InstallTarget::Cursor => {
-            let dir = PathBuf::from(".cursor/rules");
-            let content = templates::cursor_rule();
-            (dir, "autoresearch.mdc", content)
+            let dir = PathBuf::from(".cursor/skills/autoresearch");
+            let content = templates::skill_md("cursor");
+            (dir, "SKILL.md", content)
         }
         InstallTarget::Windsurf => {
-            let dir = PathBuf::from(".windsurf/rules");
-            let content = templates::windsurf_rule();
-            (dir, "autoresearch.md", content)
+            let dir = PathBuf::from(".windsurf/skills/autoresearch");
+            let content = templates::skill_md("windsurf");
+            (dir, "SKILL.md", content)
+        }
+        InstallTarget::Agents => {
+            let dir = PathBuf::from(".agents/skills/autoresearch");
+            let content = templates::skill_md("agents");
+            (dir, "SKILL.md", content)
         }
         InstallTarget::All => unreachable!(),
     };
@@ -70,7 +88,6 @@ fn install_single(target: &InstallTarget) -> Result<String, CliError> {
     let file_path = dir.join(filename);
 
     if file_path.exists() {
-        // Check if it's the same version
         if let Ok(existing) = fs::read_to_string(&file_path) {
             if existing.contains(&format!("version: {}", env!("CARGO_PKG_VERSION"))) {
                 return Err(CliError::AlreadyInstalled(

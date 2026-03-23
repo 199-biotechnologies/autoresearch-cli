@@ -4,6 +4,7 @@ mod diff;
 mod doctor;
 mod export;
 mod fork;
+mod guide;
 mod init;
 mod install;
 mod log;
@@ -52,6 +53,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
         Commands::Watch { interval } => watch::run(interval),
         Commands::MergeBest => merge_best::run(cli.json),
         Commands::Report { output } => report::run(output.as_deref(), cli.json),
+        Commands::Guide => guide::run(cli.json),
         Commands::AgentInfo => agent_info::run(cli.json),
     }
 }

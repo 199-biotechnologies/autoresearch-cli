@@ -189,10 +189,15 @@ The agent handles the **creative work** — deciding what to try, implementing c
 | Agent | Format | Install path | Slash command |
 |-------|--------|-------------|:---:|
 | Claude Code | SKILL.md | `~/.claude/skills/autoresearch/` | `/autoresearch` |
+| Gemini CLI | SKILL.md | `~/.gemini/skills/autoresearch/` | auto-discovered |
 | Codex CLI | SKILL.md | `~/.codex/skills/autoresearch/` | `/autoresearch` |
 | OpenCode | SKILL.md | `~/.config/opencode/skills/autoresearch/` | `/autoresearch` |
-| Cursor | .mdc rule | `.cursor/rules/autoresearch.mdc` | auto-triggered |
-| Windsurf | .md rule | `.windsurf/rules/autoresearch.md` | auto-triggered |
+| GitHub Copilot | SKILL.md | `.github/skills/autoresearch/` | auto-discovered |
+| Cursor | SKILL.md | `.cursor/skills/autoresearch/` | auto-discovered |
+| Windsurf | SKILL.md | `.windsurf/skills/autoresearch/` | auto-discovered |
+| Augment/Goose/Roo | SKILL.md | `.agents/skills/autoresearch/` | auto-discovered |
+
+**No skill? No problem.** Run `autoresearch guide` to get the full methodology. The CLI coaches agents through hints in every response — skills enhance discovery but aren't required.
 
 ### For Agent Developers
 

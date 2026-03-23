@@ -1,9 +1,14 @@
-/// The canonical autoresearch skill content — shared core instructions
-/// Encodes best practices from Karpathy's 126-experiment sessions,
-/// community findings (chess, Sudoku, trading bots), and triple-audit hardening.
-fn core_skill_body() -> String {
-    format!(
-        r##"
+---
+name: autoresearch
+description: >
+  Autonomous experiment loop — iteratively improve any measurable metric by modifying code,
+  evaluating results, and keeping improvements. Use when the user says "autoresearch",
+  "start experiments", "optimize this", "run the loop", or wants autonomous iteration on
+  any measurable goal. Reads autoresearch.toml for config. Run `autoresearch init` first.
+  Works without this skill — run `autoresearch guide` for the full methodology.
+version: 0.3.1
+---
+
 ## Autoresearch — Autonomous Experiment Loop
 
 You are an autonomous research agent. Your mission: iteratively improve a measurable metric
@@ -35,7 +40,7 @@ Create the experiment branch and establish ground truth:
 
 ```bash
 git checkout -b <branch> || git checkout <branch>
-echo '{{"started_at": "<ISO8601>", "iteration": 0}}' > .autoresearch/loop.lock
+echo '{"started_at": "<ISO8601>", "iteration": 0}' > .autoresearch/loop.lock
 ```
 
 Run the eval and record the baseline:
@@ -87,7 +92,7 @@ git revert HEAD --no-edit
 
 **7. Update lock and repeat:**
 ```bash
-echo '{{"started_at": "<original>", "iteration": N}}' > .autoresearch/loop.lock
+echo '{"started_at": "<original>", "iteration": N}' > .autoresearch/loop.lock
 ```
 
 ### Phase 4: When Done
@@ -210,35 +215,4 @@ Autoresearch optimizes a **single metric** via modify-eval-keep/discard cycles.
 - **`autoresearch review`** — Pipe to Codex/Gemini for cross-model second opinions
 
 ### Version
-Installed by autoresearch CLI v{version}
-"##,
-        version = env!("CARGO_PKG_VERSION")
-    )
-}
-
-/// Universal SKILL.md generator — same format works across all platforms
-/// (Claude Code, Gemini, Codex, OpenCode, Copilot, Cursor, Windsurf, .agents/)
-pub fn skill_md(_platform: &str) -> String {
-    format!(
-        r#"---
-name: autoresearch
-description: >
-  Autonomous experiment loop — iteratively improve any measurable metric by modifying code,
-  evaluating results, and keeping improvements. Use when the user says "autoresearch",
-  "start experiments", "optimize this", "run the loop", or wants autonomous iteration on
-  any measurable goal. Reads autoresearch.toml for config. Run `autoresearch init` first.
-  Works without this skill — run `autoresearch guide` for the full methodology.
-version: {version}
----
-{body}"#,
-        version = env!("CARGO_PKG_VERSION"),
-        body = core_skill_body()
-    )
-}
-
-/// Returns the full methodology guide as plain text — for `autoresearch guide` command.
-/// This is the same content as the skill body but without YAML frontmatter.
-/// Agents without skills installed can get the full playbook via this command.
-pub fn guide_text() -> String {
-    core_skill_body()
-}
+Installed by autoresearch CLI v0.3.1
