@@ -101,6 +101,16 @@ pub enum Commands {
         output: Option<String>,
     },
 
+    /// Pre-flight check before starting an experiment loop
+    Doctor,
+
+    /// Generate a markdown report of the research session
+    Report {
+        /// Output file path (stdout if not specified)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+
     /// Show CLI capabilities for agent discovery
     AgentInfo,
 }

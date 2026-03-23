@@ -71,11 +71,14 @@ autoresearch export --format csv # Export for analysis
 |---------|-------------|
 | `install <target>` | Install skill into an AI agent |
 | `init` | Initialize autoresearch in current project |
+| `record` | Record experiment result (for agent use) |
+| `doctor` | Pre-flight check before starting a loop |
 | `log [-n N]` | Show experiment history |
 | `best` | Show best experiment + diff |
 | `diff <a> <b>` | Compare two experiments |
 | `status` | Project state and loop status |
 | `export` | Export as CSV/JSON/JSONL |
+| `report` | Generate markdown research report |
 | `agent-info` | Machine-readable capabilities |
 
 All commands support `--json` for structured output (auto-enabled when piped).
