@@ -1,0 +1,269 @@
+use crate::errors::CliError;
+use serde::Serialize;
+use std::process::Command;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Experiment {
+    pub run: usize,
+    pub hash: String,
+    pub short_hash: String,
+    pub timestamp: String,
+    pub metric: Option<f64>,
+    pub status: ExperimentStatus,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ExperimentStatus {
+    Baseline,
+    Kept,
+    Discarded,
+    Unknown,
+}
+
+impl std::fmt::Display for ExperimentStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Baseline => write!(f, "baseline"),
+            Self::Kept => write!(f, "kept"),
+            Self::Discarded => write!(f, "discarded"),
+            Self::Unknown => write!(f, "unknown"),
+        }
+    }
+}
+
+/// Check if we're in a git repo
+pub fn is_git_repo() -> bool {
+    Command::new("git")
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Get the current branch name
+pub fn current_branch() -> Result<String, CliError> {
+    let output = Command::new("git")
+        .args(["branch", "--show-current"])
+        .output()
+        .map_err(|e| CliError::Git(e.to_string()))?;
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Check if experiment branch exists
+pub fn experiment_branch_exists(branch: &str) -> bool {
+    Command::new("git")
+        .args(["rev-parse", "--verify", branch])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Parse experiment history from git log
+///
+/// Looks for commits on the experiment branch and parses their messages
+/// for metric values. Supports multiple formats:
+/// - JSONL log file (.autoresearch/experiments.jsonl)
+/// - Git commit messages with [autoresearch] prefix
+/// - Standard commit messages (fallback)
+pub fn parse_experiments(branch: &str, limit: usize) -> Result<Vec<Experiment>, CliError> {
+    // First try JSONL log if it exists
+    if let Ok(experiments) = parse_jsonl_log() {
+        if !experiments.is_empty() {
+            let mut exps = experiments;
+            exps.truncate(limit);
+            return Ok(exps);
+        }
+    }
+
+    // Fall back to git log parsing
+    parse_git_log(branch, limit)
+}
+
+/// Parse experiments from .autoresearch/experiments.jsonl
+fn parse_jsonl_log() -> Result<Vec<Experiment>, CliError> {
+    let path = std::path::Path::new(".autoresearch/experiments.jsonl");
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+
+    let content = std::fs::read_to_string(path)?;
+    let mut experiments = Vec::new();
+
+    for (i, line) in content.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+            let status = match val.get("status").and_then(|s| s.as_str()) {
+                Some("baseline") => ExperimentStatus::Baseline,
+                Some("kept") | Some("keep") => ExperimentStatus::Kept,
+                Some("discarded") | Some("discard") => ExperimentStatus::Discarded,
+                _ => ExperimentStatus::Unknown,
+            };
+
+            experiments.push(Experiment {
+                run: val
+                    .get("run")
+                    .and_then(|r| r.as_u64())
+                    .unwrap_or(i as u64 + 1) as usize,
+                hash: val
+                    .get("hash")
+                    .or_else(|| val.get("commit"))
+                    .and_then(|h| h.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                short_hash: val
+                    .get("short_hash")
+                    .and_then(|h| h.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                timestamp: val
+                    .get("timestamp")
+                    .or_else(|| val.get("time"))
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                metric: val
+                    .get("metric")
+                    .or_else(|| val.get("value"))
+                    .or_else(|| val.get("score"))
+                    .and_then(|m| m.as_f64()),
+                status,
+                summary: val
+                    .get("summary")
+                    .or_else(|| val.get("description"))
+                    .or_else(|| val.get("message"))
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+            });
+        }
+    }
+
+    experiments.reverse(); // Most recent first
+    Ok(experiments)
+}
+
+/// Parse experiments from git log on experiment branch
+fn parse_git_log(branch: &str, limit: usize) -> Result<Vec<Experiment>, CliError> {
+    let output = Command::new("git")
+        .args([
+            "log",
+            branch,
+            &format!("--max-count={}", limit),
+            "--format=%H|%h|%aI|%s",
+        ])
+        .output()
+        .map_err(|e| CliError::Git(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(CliError::NoExperiments(branch.to_string()));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut experiments = Vec::new();
+
+    for (i, line) in stdout.lines().enumerate() {
+        let parts: Vec<&str> = line.splitn(4, '|').collect();
+        if parts.len() < 4 {
+            continue;
+        }
+
+        let message = parts[3];
+        let (metric, status) = parse_commit_message(message);
+
+        experiments.push(Experiment {
+            run: i + 1,
+            hash: parts[0].to_string(),
+            short_hash: parts[1].to_string(),
+            timestamp: parts[2].to_string(),
+            metric,
+            status,
+            summary: message.to_string(),
+        });
+    }
+
+    Ok(experiments)
+}
+
+/// Extract metric value and status from commit message
+fn parse_commit_message(msg: &str) -> (Option<f64>, ExperimentStatus) {
+    let lower = msg.to_lowercase();
+
+    // Pattern: [autoresearch] keep: metric=0.974 - description
+    // Pattern: [autoresearch] discard: metric=1.003 - description
+    // Pattern: [autoresearch] baseline: metric=1.050
+    if lower.contains("[autoresearch]") || lower.contains("autoresearch:") {
+        let status = if lower.contains("baseline") {
+            ExperimentStatus::Baseline
+        } else if lower.contains("keep") || lower.contains("kept") || lower.contains("improvement")
+        {
+            ExperimentStatus::Kept
+        } else if lower.contains("discard") || lower.contains("revert") {
+            ExperimentStatus::Discarded
+        } else {
+            ExperimentStatus::Unknown
+        };
+
+        let metric = extract_metric(msg);
+        return (metric, status);
+    }
+
+    // Fallback: try to find a number that looks like a metric
+    (extract_metric(msg), ExperimentStatus::Unknown)
+}
+
+/// Try to extract a numeric metric from text
+fn extract_metric(text: &str) -> Option<f64> {
+    // Look for patterns like metric=0.974, score=92.2, loss=1.003, val_bpb=0.974
+    for pattern in &["metric=", "score=", "loss=", "val_bpb=", "value="] {
+        if let Some(idx) = text.to_lowercase().find(pattern) {
+            let start = idx + pattern.len();
+            let num_str: String = text[start..]
+                .chars()
+                .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-')
+                .collect();
+            if let Ok(val) = num_str.parse::<f64>() {
+                return Some(val);
+            }
+        }
+    }
+    None
+}
+
+/// Get diff between two commits
+pub fn diff_commits(hash_a: &str, hash_b: &str) -> Result<String, CliError> {
+    let output = Command::new("git")
+        .args(["diff", hash_a, hash_b])
+        .output()
+        .map_err(|e| CliError::Git(e.to_string()))?;
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// Get diff of a specific commit (vs its parent)
+pub fn show_commit_diff(hash: &str) -> Result<String, CliError> {
+    let output = Command::new("git")
+        .args(["show", hash, "--stat", "--patch"])
+        .output()
+        .map_err(|e| CliError::Git(e.to_string()))?;
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// Check if there's a running autoresearch process (lock file)
+pub fn is_loop_running() -> bool {
+    std::path::Path::new(".autoresearch/loop.lock").exists()
+}
+
+/// Get loop state if running
+pub fn loop_state() -> Option<serde_json::Value> {
+    let path = std::path::Path::new(".autoresearch/loop.lock");
+    if !path.exists() {
+        return None;
+    }
+    let content = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&content).ok()
+}
