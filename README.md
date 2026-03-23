@@ -53,9 +53,9 @@ brew tap 199-biotechnologies/tap
 brew install autoresearch
 ```
 
-**Cargo:**
+**Cargo (from [crates.io](https://crates.io/crates/autoresearch)):**
 ```bash
-cargo install --git https://github.com/199-biotechnologies/autoresearch-cli
+cargo install autoresearch
 ```
 
 **Binary size:** ~1.1MB. **Startup:** ~2ms. **Memory:** ~3MB. No Python, no Node, no Docker.
@@ -132,6 +132,8 @@ autoresearch export --format csv # Export for analysis
 | `diff <a> <b>` | Compare two experiments side-by-side | * |
 | `status` | Project state, best metric, loop status | * |
 | `export` | Export as CSV, JSON, or JSONL | |
+| `fork <names...>` | Branch experiments into parallel directions for multi-agent exploration | |
+| `review` | Generate cross-model review prompt with pattern detection | * |
 | `report` | Generate markdown research report | |
 | `agent-info` | Machine-readable capability metadata | * |
 
@@ -237,6 +239,40 @@ branch = "autoresearch"            # Git branch for experiments
 ```
 
 `program.md` is free-form — tell the agent what to explore, link papers, set constraints. The agent reads it between experiments for inspiration.
+
+---
+
+## Multi-Direction Exploration
+
+### Fork: Parallel Branches
+
+When you want to explore multiple directions simultaneously:
+
+```bash
+autoresearch fork try-transformers try-convolutions try-linear
+```
+
+Creates `autoresearch-fork-try-transformers`, `autoresearch-fork-try-convolutions`, etc. from the current best. Start a separate agent on each:
+
+```bash
+git checkout autoresearch-fork-try-transformers && /autoresearch
+```
+
+### Review: Cross-Model Second Opinions
+
+After running experiments, get a second model to review your progress:
+
+```bash
+autoresearch review --json | jq -r '.data.review_prompt'
+```
+
+Generates a structured review prompt with:
+- Session summary (kept/discarded rates, baseline vs best)
+- Pattern detection (stuck detection, repeated failure themes)
+- Specific questions for the reviewer to answer
+- Suggested next directions
+
+Pipe to Codex or Gemini for cross-model insights that break local minima.
 
 ---
 
