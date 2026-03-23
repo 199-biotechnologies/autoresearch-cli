@@ -31,17 +31,25 @@ pub fn run(json: bool) -> Result<(), CliError> {
         0
     };
 
+    let direction = load_direction()?;
+    let lower_is_better = direction.as_deref() != Some("higher");
+
     let best_metric = if branch_exists {
         git::parse_experiments(&branch, 10000)
             .ok()
             .and_then(|exps| {
                 exps.iter()
                     .filter(|e| {
-                        e.metric.is_some() && e.status == git::ExperimentStatus::Kept
-                            || e.status == git::ExperimentStatus::Baseline
+                        e.metric.is_some()
+                            && (e.status == git::ExperimentStatus::Kept
+                                || e.status == git::ExperimentStatus::Baseline)
                     })
                     .filter_map(|e| e.metric)
-                    .reduce(f64::min) // assumes lower is better by default
+                    .reduce(if lower_is_better {
+                        f64::min
+                    } else {
+                        f64::max
+                    })
             })
     } else {
         None
@@ -121,6 +129,20 @@ fn load_branch() -> Result<Option<String>, CliError> {
         toml::from_str(&content).map_err(|e| CliError::Config(e.to_string()))?;
     Ok(table
         .get("branch")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string()))
+}
+
+fn load_direction() -> Result<Option<String>, CliError> {
+    let path = std::path::Path::new("autoresearch.toml");
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = std::fs::read_to_string(path)?;
+    let table: toml::Table =
+        toml::from_str(&content).map_err(|e| CliError::Config(e.to_string()))?;
+    Ok(table
+        .get("metric_direction")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string()))
 }

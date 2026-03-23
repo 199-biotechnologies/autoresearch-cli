@@ -2,9 +2,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum CliError {
-    #[error("Not an autoresearch project (no autoresearch.toml found). Run `autoresearch init` first.")]
-    NotInitialized,
-
     #[error("Not a git repository. Autoresearch requires git for experiment tracking.")]
     NotGitRepo,
 
@@ -33,8 +30,7 @@ pub enum CliError {
 impl CliError {
     pub fn exit_code(&self) -> i32 {
         match self {
-            Self::NotInitialized | Self::Config(_) => 2,
-            Self::NotGitRepo => 2,
+            Self::Config(_) | Self::NotGitRepo => 2,
             Self::NoExperiments(_) | Self::RunNotFound(_) => 1,
             Self::Git(_) => 1,
             Self::Io(_) => 1,
@@ -45,7 +41,6 @@ impl CliError {
 
     pub fn error_code(&self) -> &'static str {
         match self {
-            Self::NotInitialized => "not_initialized",
             Self::NotGitRepo => "not_git_repo",
             Self::NoExperiments(_) => "no_experiments",
             Self::RunNotFound(_) => "run_not_found",
@@ -54,6 +49,25 @@ impl CliError {
             Self::Io(_) => "io_error",
             Self::AlreadyInstalled(_) => "already_installed",
             Self::ParseError(_) => "parse_error",
+        }
+    }
+
+    pub fn suggestion(&self) -> &'static str {
+        match self {
+            Self::NotGitRepo => "Run `git init` first, then `autoresearch init`.",
+            Self::NoExperiments(_) => {
+                "Run `autoresearch init` then start the autoresearch loop in your agent."
+            }
+            Self::RunNotFound(_) => "Use `autoresearch log` to see available run numbers.",
+            Self::Config(_) => "Check autoresearch.toml syntax. Regenerate with `autoresearch init`.",
+            Self::Git(_) => "Check git state: `git status`. Ensure the experiment branch exists.",
+            Self::Io(_) => "Check file permissions and disk space.",
+            Self::AlreadyInstalled(_) => {
+                "Already up to date. Update CLI version then reinstall for latest skill."
+            }
+            Self::ParseError(_) => {
+                "Check .autoresearch/experiments.jsonl for malformed lines."
+            }
         }
     }
 }

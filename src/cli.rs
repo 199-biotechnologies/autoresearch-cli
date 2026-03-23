@@ -28,7 +28,46 @@ pub enum Commands {
     },
 
     /// Initialize autoresearch in the current project
-    Init,
+    Init {
+        /// Target file the agent may modify
+        #[arg(long)]
+        target_file: Option<String>,
+
+        /// Eval command that produces the metric
+        #[arg(long)]
+        eval_command: Option<String>,
+
+        /// Metric name (e.g., val_bpb, accuracy, p99_latency)
+        #[arg(long, default_value = "metric")]
+        metric_name: String,
+
+        /// Metric direction: lower or higher
+        #[arg(long, default_value = "lower")]
+        metric_direction: String,
+
+        /// Time budget per experiment (e.g., 5m, 30s)
+        #[arg(long, default_value = "5m")]
+        time_budget: String,
+
+        /// Git branch for experiments
+        #[arg(long, default_value = "autoresearch")]
+        branch: String,
+    },
+
+    /// Record an experiment result (for agent use)
+    Record {
+        /// Metric value from this experiment
+        #[arg(long)]
+        metric: f64,
+
+        /// Status: kept, discarded, or baseline
+        #[arg(long)]
+        status: String,
+
+        /// Summary of what was tried
+        #[arg(long)]
+        summary: String,
+    },
 
     /// Show experiment history from git log
     Log {

@@ -9,8 +9,9 @@ use std::process;
 
 fn main() {
     let cli = cli::parse();
+    let json_flag = cli.json;
     if let Err(e) = cmd::run(cli) {
-        let format = output::format::OutputFormat::detect(false);
+        let format = output::format::OutputFormat::detect(json_flag);
         match format {
             output::format::OutputFormat::Json => {
                 let err_json = serde_json::json!({
@@ -18,9 +19,10 @@ fn main() {
                     "error": {
                         "code": e.error_code(),
                         "message": e.to_string(),
+                        "suggestion": e.suggestion(),
                     }
                 });
-                eprintln!("{}", serde_json::to_string_pretty(&err_json).unwrap());
+                println!("{}", serde_json::to_string_pretty(&err_json).unwrap());
             }
             output::format::OutputFormat::Table => {
                 eprintln!("error: {e}");

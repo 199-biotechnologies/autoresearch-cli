@@ -5,6 +5,7 @@ mod export;
 mod init;
 mod install;
 mod log;
+mod record;
 mod status;
 
 use crate::cli::{Cli, Commands};
@@ -13,7 +14,27 @@ use crate::errors::CliError;
 pub fn run(cli: Cli) -> Result<(), CliError> {
     match cli.command {
         Commands::Install { target } => install::run(&target, cli.json),
-        Commands::Init => init::run(cli.json),
+        Commands::Init {
+            target_file,
+            eval_command,
+            metric_name,
+            metric_direction,
+            time_budget,
+            branch,
+        } => init::run(
+            target_file,
+            eval_command,
+            &metric_name,
+            &metric_direction,
+            &time_budget,
+            &branch,
+            cli.json,
+        ),
+        Commands::Record {
+            metric,
+            status,
+            summary,
+        } => record::run(metric, &status, &summary, cli.json),
         Commands::Log { limit } => log::run(limit, cli.json),
         Commands::Best => best::run(cli.json),
         Commands::Diff { run_a, run_b } => diff::run(run_a, run_b, cli.json),

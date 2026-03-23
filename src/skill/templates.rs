@@ -24,14 +24,15 @@ by modifying code, running experiments, and keeping what works.
    git checkout -b <branch> || git checkout <branch>
    ```
 
-4. Run baseline evaluation and record as experiment #0:
+4. Create a lock file to signal the loop is running:
    ```bash
-   <eval_command>
+   echo '{{"started_at": "<ISO8601>", "iteration": 0}}' > .autoresearch/loop.lock
    ```
 
-5. Log baseline to `.autoresearch/experiments.jsonl`:
-   ```json
-   {{"run": 0, "hash": "<commit>", "metric": <value>, "status": "baseline", "summary": "Initial baseline", "timestamp": "<ISO8601>"}}
+5. Run baseline evaluation and record it:
+   ```bash
+   METRIC=$(<eval_command>)
+   autoresearch record --metric $METRIC --status baseline --summary "Initial baseline"
    ```
 
 ### The Loop (repeat indefinitely)
@@ -39,7 +40,7 @@ by modifying code, running experiments, and keeping what works.
 For each iteration N:
 
 1. **Plan** — Based on previous results, `program.md`, and the target file, decide ONE atomic change to try.
-   Think about what might improve the metric. Read the experiment log for patterns.
+   Run `autoresearch log` to see what's been tried. Don't repeat failed approaches.
 
 2. **Implement** — Make the change to `target_file` only. Keep changes atomic and small.
 
@@ -53,20 +54,33 @@ For each iteration N:
    ```bash
    timeout <time_budget> <eval_command>
    ```
+   If the command times out or returns non-zero, treat as a failed experiment (discard).
+   If the metric cannot be parsed from output, treat as failed (discard).
 
-5. **Decide** — Parse the metric from eval output:
+5. **Decide and Record** — Parse the metric from eval output:
    - If metric improved (or equal): **KEEP**
-   - If metric worsened: **DISCARD** and revert:
      ```bash
+     autoresearch record --metric <value> --status kept --summary "<what you tried>"
+     ```
+   - If metric worsened or eval failed: **DISCARD** and revert:
+     ```bash
+     autoresearch record --metric <value> --status discarded --summary "<what you tried>"
      git revert HEAD --no-edit
      ```
 
-6. **Log** — Append to `.autoresearch/experiments.jsonl`:
-   ```json
-   {{"run": N, "hash": "<commit>", "metric": <value>, "delta": <change>, "status": "kept|discarded", "summary": "<what you tried>", "timestamp": "<ISO8601>"}}
+6. **Update lock** — Update the iteration count:
+   ```bash
+   echo '{{"started_at": "<original>", "iteration": N}}' > .autoresearch/loop.lock
    ```
 
 7. **Repeat** — Go to step 1. Never stop unless interrupted.
+
+### When Done
+
+Remove the lock file:
+```bash
+rm -f .autoresearch/loop.lock
+```
 
 ### Rules
 
@@ -82,10 +96,12 @@ For each iteration N:
 
 ### CLI Integration
 
-Use the `autoresearch` CLI for tracking:
-- `autoresearch status` — check current state
+Use the `autoresearch` CLI for all state management:
+- `autoresearch record --metric <V> --status <S> --summary "<M>"` — record experiment result (ALWAYS use this instead of manual JSONL)
+- `autoresearch status` — check current state and best metric
 - `autoresearch log` — view experiment history
 - `autoresearch best` — see the best result so far
+- `autoresearch diff <a> <b>` — compare two experiments
 
 ### Version
 Installed by autoresearch CLI v{version}
