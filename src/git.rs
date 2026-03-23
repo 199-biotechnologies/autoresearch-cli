@@ -68,12 +68,27 @@ pub fn experiment_branch_exists(branch: &str) -> bool {
 /// - Git commit messages with [autoresearch] prefix
 /// - Standard commit messages (fallback)
 pub fn parse_experiments(branch: &str, limit: usize) -> Result<Vec<Experiment>, CliError> {
-    // First try JSONL log if it exists
-    if let Ok(experiments) = parse_jsonl_log() {
-        if !experiments.is_empty() {
-            let mut exps = experiments;
-            exps.truncate(limit);
-            return Ok(exps);
+    // Determine if we're on the requested branch (can use working-tree JSONL)
+    let current = current_branch().unwrap_or_default();
+    let on_target_branch = current == branch;
+
+    // If on the target branch, try working-tree JSONL first (most accurate)
+    if on_target_branch {
+        if let Ok(experiments) = parse_jsonl_log() {
+            if !experiments.is_empty() {
+                let mut exps = experiments;
+                exps.truncate(limit);
+                return Ok(exps);
+            }
+        }
+    } else {
+        // For other branches, read JSONL via git show to get branch-specific data
+        if let Ok(experiments) = parse_jsonl_from_branch(branch) {
+            if !experiments.is_empty() {
+                let mut exps = experiments;
+                exps.truncate(limit);
+                return Ok(exps);
+            }
         }
     }
 
@@ -81,14 +96,33 @@ pub fn parse_experiments(branch: &str, limit: usize) -> Result<Vec<Experiment>, 
     parse_git_log(branch, limit)
 }
 
-/// Parse experiments from .autoresearch/experiments.jsonl
+/// Parse experiments from a specific branch's JSONL via git show
+fn parse_jsonl_from_branch(branch: &str) -> Result<Vec<Experiment>, CliError> {
+    let output = Command::new("git")
+        .args(["show", &format!("{branch}:.autoresearch/experiments.jsonl")])
+        .output()
+        .map_err(|e| CliError::Git(e.to_string()))?;
+
+    if !output.status.success() {
+        return Ok(vec![]);
+    }
+
+    let content = String::from_utf8_lossy(&output.stdout);
+    parse_jsonl_content(&content)
+}
+
+/// Parse experiments from working-tree .autoresearch/experiments.jsonl
 fn parse_jsonl_log() -> Result<Vec<Experiment>, CliError> {
     let path = std::path::Path::new(".autoresearch/experiments.jsonl");
     if !path.exists() {
         return Ok(vec![]);
     }
-
     let content = std::fs::read_to_string(path)?;
+    parse_jsonl_content(&content)
+}
+
+/// Parse JSONL content string into experiments
+fn parse_jsonl_content(content: &str) -> Result<Vec<Experiment>, CliError> {
     let mut experiments = Vec::new();
 
     for (i, line) in content.lines().enumerate() {
@@ -217,16 +251,21 @@ fn parse_commit_message(msg: &str) -> (Option<f64>, ExperimentStatus) {
 
 /// Try to extract a numeric metric from text
 fn extract_metric(text: &str) -> Option<f64> {
-    // Look for patterns like metric=0.974, score=92.2, loss=1.003, val_bpb=0.974
+    // Search on lowercased text but extract from original using char offsets (safe for non-ASCII)
+    let lower = text.to_lowercase();
     for pattern in &["metric=", "score=", "loss=", "val_bpb=", "value="] {
-        if let Some(idx) = text.to_lowercase().find(pattern) {
-            let start = idx + pattern.len();
-            let num_str: String = text[start..]
+        if let Some(byte_idx) = lower.find(pattern) {
+            // Convert byte offset to char offset safely
+            let char_start = lower[..byte_idx].chars().count() + pattern.chars().count();
+            let num_str: String = text
                 .chars()
+                .skip(char_start)
                 .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-' || *c == 'e' || *c == 'E' || *c == '+')
                 .collect();
             if let Ok(val) = num_str.parse::<f64>() {
-                return Some(val);
+                if val.is_finite() {
+                    return Some(val);
+                }
             }
         }
     }
@@ -245,6 +284,11 @@ pub fn diff_commits(hash_a: &str, hash_b: &str) -> Result<String, CliError> {
         .output()
         .map_err(|e| CliError::Git(e.to_string()))?;
 
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(CliError::Git(format!("git diff failed: {stderr}")));
+    }
+
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
@@ -254,6 +298,11 @@ pub fn show_commit_diff(hash: &str) -> Result<String, CliError> {
         .args(["show", hash, "--stat", "--patch"])
         .output()
         .map_err(|e| CliError::Git(e.to_string()))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(CliError::Git(format!("git show failed: {stderr}")));
+    }
 
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }

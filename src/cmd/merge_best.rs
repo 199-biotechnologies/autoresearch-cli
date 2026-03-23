@@ -138,11 +138,7 @@ pub fn run(json: bool) -> Result<(), CliError> {
                     .map(|m| format!("{:.6}", m))
                     .unwrap_or_else(|| "-".into());
                 let marker = if i == 0 { " *" } else { "" };
-                let branch_display = if br.branch.len() > 28 {
-                    format!("{}...", &br.branch[..25])
-                } else {
-                    br.branch.clone()
-                };
+                let branch_display = crate::output::truncate(&br.branch, 28);
 
                 println!(
                     "  {:>4}  {:<30}  {:>10}  {:>6}  {:>6}{}",

@@ -7,11 +7,7 @@ pub fn run(json: bool) -> Result<(), CliError> {
     let config = load_branch()?;
     let branch = config.as_deref().unwrap_or("autoresearch");
 
-    if !git::experiment_branch_exists(branch) {
-        return Err(CliError::NoExperiments(branch.to_string()));
-    }
-
-    let experiments = git::parse_experiments(branch, 500)?;
+    let experiments = git::parse_experiments(branch, 10000).unwrap_or_default();
     if experiments.is_empty() {
         return Err(CliError::NoExperiments(branch.to_string()));
     }

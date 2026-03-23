@@ -8,11 +8,9 @@ pub fn run(limit: usize, json: bool) -> Result<(), CliError> {
     let config = load_config()?;
     let branch = config.branch.as_deref().unwrap_or("autoresearch");
 
-    if !git::experiment_branch_exists(branch) {
-        return Err(CliError::NoExperiments(branch.to_string()));
-    }
-
-    let experiments = git::parse_experiments(branch, limit)?;
+    // Try to parse experiments — parse_experiments handles branch-aware JSONL reading
+    // Don't reject on missing branch alone; JSONL may exist in working tree
+    let experiments = git::parse_experiments(branch, limit).unwrap_or_default();
 
     if experiments.is_empty() {
         return Err(CliError::NoExperiments(branch.to_string()));
@@ -61,11 +59,7 @@ pub fn run(limit: usize, json: bool) -> Result<(), CliError> {
                     .map(|m| format!("{:.4}", m))
                     .unwrap_or_else(|| "-".to_string());
 
-                let summary = if exp.summary.len() > 50 {
-                    format!("{}...", &exp.summary[..47])
-                } else {
-                    exp.summary.clone()
-                };
+                let summary = crate::output::truncate(&exp.summary, 50);
 
                 table.add_row(vec![
                     Cell::new(exp.run),

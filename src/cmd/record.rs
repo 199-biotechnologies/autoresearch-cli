@@ -29,6 +29,48 @@ pub fn run(metric: f64, status: &str, summary: &str, json: bool) -> Result<(), C
         _ => status,
     };
 
+    // Validate kept status against metric direction (anti-reward-hacking)
+    if normalized_status == "kept" {
+        if let Ok(config) = load_config() {
+            let direction = config
+                .get("metric_direction")
+                .and_then(|v| v.as_str())
+                .unwrap_or("lower");
+            let lower_is_better = direction != "higher";
+
+            // Find the last kept/baseline metric
+            let log_path_check = std::path::Path::new(".autoresearch/experiments.jsonl");
+            if log_path_check.exists() {
+                if let Ok(content) = fs::read_to_string(log_path_check) {
+                    let prev_best = content
+                        .lines()
+                        .rev()
+                        .filter(|l| !l.trim().is_empty())
+                        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+                        .filter(|v| {
+                            let s = v.get("status").and_then(|s| s.as_str()).unwrap_or("");
+                            s == "kept" || s == "baseline"
+                        })
+                        .find_map(|v| v.get("metric").and_then(|m| m.as_f64()));
+
+                    if let Some(prev) = prev_best {
+                        let regressed = if lower_is_better {
+                            metric > prev
+                        } else {
+                            metric < prev
+                        };
+                        if regressed {
+                            eprintln!(
+                                "warning: metric {:.6} is worse than previous best {:.6} ({direction} is better). Recording as 'kept' anyway — consider 'discarded'.",
+                                metric, prev
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Read existing experiments to determine run number
     let log_path = ".autoresearch/experiments.jsonl";
     fs::create_dir_all(".autoresearch")?;
@@ -59,11 +101,7 @@ pub fn run(metric: f64, status: &str, summary: &str, json: bool) -> Result<(), C
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default();
 
-    let short_hash = if hash.len() >= 7 {
-        hash[..7].to_string()
-    } else {
-        hash.clone()
-    };
+    let short_hash: String = hash.chars().take(7).collect();
 
     // Calculate delta from previous kept/baseline metric
     let delta = if std::path::Path::new(log_path).exists() {
@@ -128,4 +166,13 @@ pub fn run(metric: f64, status: &str, summary: &str, json: bool) -> Result<(), C
     }
 
     Ok(())
+}
+
+fn load_config() -> Result<toml::Table, CliError> {
+    let path = std::path::Path::new("autoresearch.toml");
+    if !path.exists() {
+        return Err(CliError::Config("No autoresearch.toml".into()));
+    }
+    let content = std::fs::read_to_string(path)?;
+    toml::from_str(&content).map_err(|e| CliError::Config(e.to_string()))
 }

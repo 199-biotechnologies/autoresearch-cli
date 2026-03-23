@@ -202,11 +202,7 @@ pub fn run(interval: u64) -> Result<(), CliError> {
                 git::ExperimentStatus::Unknown => ("?", "\x1b[90m"),
             };
 
-            let summary = if exp.summary.len() > 35 {
-                format!("{}...", &exp.summary[..32])
-            } else {
-                exp.summary.clone()
-            };
+            let summary = crate::output::truncate(&exp.summary, 35);
 
             println!(
                 "  {color}{:>4}  {:>10}  {:>8}  {:>10}  {}\x1b[0m",

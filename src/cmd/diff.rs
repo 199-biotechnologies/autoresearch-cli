@@ -6,11 +6,10 @@ pub fn run(run_a: usize, run_b: usize, json: bool) -> Result<(), CliError> {
     let format = OutputFormat::detect(json);
     let branch = load_branch()?.unwrap_or_else(|| "autoresearch".to_string());
 
-    if !git::experiment_branch_exists(&branch) {
+    let experiments = git::parse_experiments(&branch, 10000).unwrap_or_default();
+    if experiments.is_empty() {
         return Err(CliError::NoExperiments(branch));
     }
-
-    let experiments = git::parse_experiments(&branch, 500)?;
 
     let exp_a = experiments
         .iter()

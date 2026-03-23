@@ -88,16 +88,19 @@ rm -f .autoresearch/loop.lock
 - **Atomic changes** — One idea per experiment. Don't combine multiple changes.
 - **Commit before eval** — Always commit before running the eval so you can revert cleanly.
 - **Mechanical verification only** — The eval command is the only judge. Don't use your own judgment about whether a change "should" help.
-- **Git is memory** — The commit log IS the experiment log. Each commit tells the story.
-- **Log everything** — Even discarded experiments are valuable data. Log them.
-- **Read the log** — Before each experiment, review what's been tried. Don't repeat failed approaches unless you have a new angle.
-- **Creative when stuck** — If the last 5 experiments were all discarded, try a completely different approach. Read `program.md` for inspiration.
+- **JSONL is canonical state** — The `.autoresearch/experiments.jsonl` file (managed by the CLI) is the source of truth. Git commits are secondary. NEVER write to the JSONL file directly.
+- **Eval must print exactly one number** — The eval command must print the metric value as its last line of stdout. If it prints multiple lines, only the last number matters.
+- **Log everything** — Even discarded experiments are valuable data. Record them.
+- **Read the log** — Before each experiment, run `autoresearch log` to see what's been tried. Don't repeat failed approaches unless you have a new angle.
+- **Creative when stuck** — If the last 5 experiments were all discarded, try a completely different approach. Read `program.md` for inspiration. Consider running `autoresearch review` for cross-model analysis.
 - **Simplicity wins** — Prefer the simplest change that improves the metric.
+- **Multi-objective awareness** — If your eval measures time/cost alongside the primary metric, a change that improves the metric but doubles runtime may not be a real win. Consider secondary effects.
+- **macOS timeout** — If `timeout` is not available, use `perl -e 'alarm(<seconds>); exec @ARGV' <eval_command>` as a portable alternative.
 
 ### CLI Integration
 
-Use the `autoresearch` CLI for all state management:
-- `autoresearch record --metric <V> --status <S> --summary "<M>"` — record experiment result (ALWAYS use this instead of manual JSONL)
+Use the `autoresearch` CLI for ALL state management. NEVER write to experiments.jsonl directly.
+- `autoresearch record --metric <V> --status <S> --summary '<M>'` — record experiment result (use single quotes around summary to avoid shell escaping issues)
 - `autoresearch status` — check current state and best metric
 - `autoresearch log` — view experiment history
 - `autoresearch best` — see the best result so far
