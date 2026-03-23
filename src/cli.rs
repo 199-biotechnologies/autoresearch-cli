@@ -56,8 +56,8 @@ pub enum Commands {
 
     /// Record an experiment result (for agent use)
     Record {
-        /// Metric value from this experiment
-        #[arg(long)]
+        /// Metric value from this experiment (use = for negatives: --metric=-0.5)
+        #[arg(long, allow_negative_numbers = true)]
         metric: f64,
 
         /// Status: kept, discarded, or baseline
@@ -103,6 +103,16 @@ pub enum Commands {
 
     /// Pre-flight check before starting an experiment loop
     Doctor,
+
+    /// Fork experiments into parallel branches for multi-direction exploration
+    Fork {
+        /// Names for each fork (creates autoresearch/<name> branches)
+        #[arg(required = true)]
+        names: Vec<String>,
+    },
+
+    /// Generate a cross-model review prompt from experiment history
+    Review,
 
     /// Generate a markdown report of the research session
     Report {

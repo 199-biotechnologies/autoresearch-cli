@@ -3,11 +3,13 @@ mod best;
 mod diff;
 mod doctor;
 mod export;
+mod fork;
 mod init;
 mod install;
 mod log;
 mod record;
 mod report;
+mod review;
 mod status;
 
 use crate::cli::{Cli, Commands};
@@ -43,6 +45,8 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
         Commands::Status => status::run(cli.json),
         Commands::Export { format, output } => export::run(&format, output.as_deref(), cli.json),
         Commands::Doctor => doctor::run(cli.json),
+        Commands::Fork { names } => fork::run(&names, cli.json),
+        Commands::Review => review::run(cli.json),
         Commands::Report { output } => report::run(output.as_deref(), cli.json),
         Commands::AgentInfo => agent_info::run(cli.json),
     }
