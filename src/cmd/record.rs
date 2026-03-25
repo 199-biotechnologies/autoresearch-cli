@@ -152,7 +152,7 @@ pub fn run(metric: f64, status: &str, summary: &str, json: bool) -> Result<(), C
     // Lock is released when file is dropped
 
     // Generate contextual hints based on experiment state
-    let hints = generate_hints(&content, normalized_status, run_number);
+    let hints = generate_hints(&content, normalized_status, run_number, metric);
 
     match format {
         OutputFormat::Json => {
@@ -179,60 +179,100 @@ pub fn run(metric: f64, status: &str, summary: &str, json: bool) -> Result<(), C
 }
 
 /// Generate contextual hints based on experiment history
-fn generate_hints(jsonl_content: &str, status: &str, run_number: usize) -> Vec<String> {
+fn generate_hints(jsonl_content: &str, status: &str, run_number: usize, current_metric: f64) -> Vec<String> {
     let mut hints = Vec::new();
 
     // Count recent consecutive discards
-    let recent_statuses: Vec<&str> = jsonl_content
+    let consecutive_discards = jsonl_content
         .lines()
         .rev()
         .filter(|l| !l.trim().is_empty())
         .filter_map(|l| {
             serde_json::from_str::<serde_json::Value>(l)
                 .ok()
-                .and_then(|v| v.get("status").and_then(|s| s.as_str().map(|s| s.to_string())))
+                .and_then(|v| v.get("status").and_then(|s| s.as_str()).map(|s| s.to_string()))
         })
-        .take(10)
-        .map(|s| if s == "discarded" { "discarded" } else { "other" })
-        .collect();
-
-    let consecutive_discards = recent_statuses
-        .iter()
-        .take_while(|s| **s == "discarded")
+        .take_while(|s| s == "discarded")
         .count();
 
-    // Add current status to count if it's a discard
     let total_streak = if status == "discarded" {
         consecutive_discards + 1
     } else {
         0
     };
 
-    // Contextual hints based on state
+    // Stuck detection
     if total_streak >= 7 {
         hints.push(
-            "STUCK: 7+ consecutive discards. You are in a deep local minimum. Try a fundamentally different approach: change strategy entirely, try removing code instead of adding, or run `autoresearch review` for cross-model analysis.".to_string()
+            "STUCK: 7+ consecutive discards. You are in a deep local minimum. Try a fundamentally different approach: change strategy entirely, try removing code instead of adding, or run `autoresearch review` for cross-model analysis.".into()
         );
     } else if total_streak >= 5 {
         hints.push(
-            "WARNING: 5+ consecutive discards. Consider: (1) run `autoresearch review` for fresh perspective, (2) try the OPPOSITE of recent attempts, (3) use `autoresearch fork` to explore multiple directions.".to_string()
+            "WARNING: 5+ consecutive discards. Consider: (1) run `autoresearch review` for fresh perspective, (2) try the OPPOSITE of recent attempts, (3) use `autoresearch fork` to explore multiple directions.".into()
         );
     } else if total_streak >= 3 {
         hints.push(
-            "3 consecutive discards. Re-read `program.md` for ideas you haven't tried. Consider a different category of change (e.g., if tuning hyperparameters, try architecture instead).".to_string()
+            "3 consecutive discards. Re-read `program.md` for ideas you haven't tried. Consider a different category of change (e.g., if tuning hyperparameters, try architecture instead).".into()
         );
     }
 
+    // Baseline coaching
     if run_number == 0 && status == "baseline" {
         hints.push(
-            "Baseline recorded. Strategy: start with hyperparameter tuning (learning rate, batch size, weight decay) — lowest risk, highest signal. Save architecture changes for later.".to_string()
+            "Baseline recorded. Strategy: start with hyperparameter tuning (learning rate, batch size, weight decay) — lowest risk, highest signal. Save architecture changes for later.".into()
         );
     }
 
+    // Kept experiment: check for implausible improvement (Goodhart/reward hacking)
     if status == "kept" && run_number > 0 {
-        hints.push("Good improvement. Keep exploring in this direction with small variations before switching to a different approach.".to_string());
+        let kept_metrics: Vec<f64> = jsonl_content
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+            .filter(|v| {
+                let s = v.get("status").and_then(|s| s.as_str()).unwrap_or("");
+                s == "kept" || s == "baseline"
+            })
+            .filter_map(|v| v.get("metric").and_then(|m| m.as_f64()))
+            .collect();
+
+        if kept_metrics.len() >= 3 {
+            let baseline = kept_metrics.first().copied().unwrap_or(1.0);
+            let prev_best = kept_metrics.last().copied().unwrap_or(baseline);
+
+            // Total cumulative improvement so far
+            let cumulative = (baseline - prev_best).abs();
+            // This experiment's claimed improvement
+            let this_step = (prev_best - current_metric).abs();
+
+            // If one step claims more than 10x the total cumulative improvement, flag it
+            if cumulative > f64::EPSILON && this_step > cumulative * 10.0 {
+                hints.push(format!(
+                    "SUSPICIOUS: This single experiment claims {:.1}x more improvement than ALL previous experiments combined ({:.6} vs cumulative {:.6}). This may indicate reward hacking (e.g., caching I/O, memorizing the test set, gaming the eval). Verify the improvement is genuine before continuing. See: Goodhart's law of autoresearch.",
+                    this_step / cumulative, this_step, cumulative
+                ));
+            }
+
+            // Also flag if the metric improved by more than 100x in absolute terms
+            if prev_best.abs() > f64::EPSILON {
+                let ratio = current_metric / prev_best;
+                if ratio > 100.0 || ratio < 0.01 {
+                    hints.push(format!(
+                        "SUSPICIOUS: Metric changed by {:.0}x in one step (from {:.6} to {:.6}). Typical autoresearch improvements are incremental. Large jumps often indicate the agent is gaming the eval rather than making real improvements.",
+                        if ratio > 1.0 { ratio } else { 1.0 / ratio },
+                        prev_best,
+                        current_metric
+                    ));
+                }
+            }
+        }
+
+        if hints.iter().all(|h| !h.starts_with("SUSPICIOUS")) {
+            hints.push("Good improvement. Keep exploring in this direction with small variations before switching to a different approach.".into());
+        }
     }
 
+    // Periodic review reminder
     if run_number > 0 && run_number % 20 == 0 {
         hints.push(format!(
             "{run_number} experiments completed. Consider running `autoresearch report` to review progress and `autoresearch review` for cross-model analysis."

@@ -122,6 +122,23 @@ These strategies come from Karpathy's 126-experiment overnight sessions, communi
 4. **Exotic ideas last** — Novel approaches, paper reproductions, unconventional techniques.
    Save these for when standard approaches plateau.
 
+#### Where Autoresearch Works Best (Han Xiao / Jina AI findings)
+
+Autoresearch is most effective for **speed optimization**, where:
+1. The objective is a single scalar (wall-clock time) with clear better/worse signal
+2. Quality degradation is cheap to evaluate (simple MSE/diff against baseline output as pass/fail gate)
+3. The search space is micro-optimizations: dtype casting, quantization, cache tricks, eval scheduling —
+   each change is small, independent, and instantly benchmarkable
+
+**Warning — Goodhart's Law of Autoresearch:** When the metric becomes the target, it ceases to be
+a good metric. Real example: after 108 legit experiments (2.6x speedup ceiling), an agent started
+caching I/O to fake a 101,687x speedup by memorizing the small test set. The CLI will flag
+implausible improvements, but you must also design your eval to resist gaming:
+- Use a test set large enough that memorization is impractical
+- Rotate test data between experiments if possible
+- Include a quality/correctness gate alongside the speed metric
+- If an improvement seems too good to be true, it probably is
+
 #### When You're Stuck (5+ consecutive discards)
 
 You are in a local minimum. Do NOT keep tweaking the same thing. Instead:
